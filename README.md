@@ -16,58 +16,14 @@ The project compares **raw vs log-transformed targets**, selects the best model,
 ---
 
 ## 🚀 Live Demo
-👉 **Streamlit App**: *(configure after first push)*  
-- Go to **streamlit.io** → Deploy new app → Repo: `Daksh1119/SCT_ML_1`, Branch: `main`, File: `app.py`.
+👉 [Streamlit App](https://sct-ml-1-daksh1119.streamlit.app) *(after deployment)*  
 
 ---
 
 ## ⚙️ Installation
+Clone the repo and install dependencies:
+
 ```bash
 git clone https://github.com/Daksh1119/SCT_ML_1.git
 cd SCT_ML_1
 pip install -r requirements.txt
-```
-
-Run the app locally:
-```bash
-streamlit run app.py
-```
-
----
-
-## 📊 Dashboard
-
-- Interactive version:  
-  👉 [Dashboard (GitHub Pages)](https://daksh1119.github.io/SCT_ML_1/dashboard.html)
-
-- Static snapshot:  
-  ![Dashboard Snapshot](https://raw.githubusercontent.com/Daksh1119/SCT_ML_1/main/newplot.png)
-
-
----
-
-## 🔑 Key Insights (from analysis)
-- **Log transformation** of SalePrice improves error distribution and often reduces RMSE.  
-- **Outliers** can distort linear coefficients; trimming or robust modeling helps.  
-- Key predictors include `GrLivArea`; adding quality variables (e.g., `OverallQual`) typically improves fit.
-
----
-
-## 📂 Project Structure
-```
-SCT_ML_1/
-├─ app.py
-├─ requirements.txt
-├─ README.md
-├─ linear_log.pkl               # trained model (add after training)
-├─ notebooks/
-│  └─ house_price_analysis.ipynb
-├─ docs/
-│  └─ dashboard.html            # optional, for GitHub Pages
-└─ newplot.png                  # optional snapshot of dashboard
-```
-
----
-
-## 📌 Author
-**Daksh1119** · Repository: [SCT_ML_1](https://github.com/Daksh1119/SCT_ML_1)
