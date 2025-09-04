@@ -35,13 +35,14 @@ streamlit run app.py
 
 ---
 
-## 📊 Dashboard (from notebook)
-If you exported an interactive dashboard (`docs/dashboard.html`) and a snapshot (`newplot.png`), they’ll show here:
+## 📊 Dashboard
 
-![Dashboard](newplot.png)
+- Interactive version:  
+  👉 [Dashboard (GitHub Pages)](https://daksh1119.github.io/SCT_ML_1/dashboard.html)
 
-👉 If you enable **GitHub Pages** (Settings → Pages → Branch: `main`, Folder: `/docs`), the interactive dashboard will be at:  
-`https://daksh1119.github.io/SCT_ML_1/dashboard.html`
+- Static snapshot:  
+  ![Dashboard Snapshot](https://raw.githubusercontent.com/Daksh1119/SCT_ML_1/main/newplot.png)
+
 
 ---
 
