@@ -50,11 +50,44 @@ st.sidebar.markdown("[Repository](https://github.com/Daksh1119/SCT_ML_1)")
 # -------------------
 # Header / logo
 # -------------------
-logo_path = Path("logo.png")
-if logo_path.exists():
-    st.markdown(f"<div class='hero'><div class='title'><img src='{logo_path}' width='84' style='border-radius:10px;'/><div><h1>House Price Prediction</h1><div class='subtitle'>Estimate property value quickly and professionally</div></div></div></div>", unsafe_allow_html=True)
-else:
-    st.markdown(f"<div class='hero'><div class='title'><svg width='48' height='48' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><rect rx='4' width='24' height='24' fill='#5b7cff'/><path d='M6 14h3v4H6zM11 10h3v8h-3zM16 6h3v12h-3z' fill='white'/></svg><div><h1>House Price Prediction</h1><div class='subtitle'>Estimate property value quickly and professionally</div></div></div></div>", unsafe_allow_html=True)
+# Robust logo loading (local first, then GitHub raw URL fallback)
+from pathlib import Path
+import requests
+
+LOGO_LOCAL = Path("logo.png")
+RAW_URL = "https://raw.githubusercontent.com/Daksh1119/SCT_ML_1/main/logo.png"
+
+def show_logo(width=84):
+    # 1) try local file (best)
+    try:
+        if LOGO_LOCAL.exists():
+            st.image(str(LOGO_LOCAL), width=width)
+            return
+    except Exception:
+        pass
+
+    # 2) try raw GitHub URL (public repo)
+    try:
+        # attempt a quick HEAD request to confirm availability
+        resp = requests.head(RAW_URL, timeout=5)
+        if resp.status_code == 200:
+            st.image(RAW_URL, width=width)
+            return
+    except Exception:
+        pass
+
+    # 3) fallback inline SVG (small, always-safe)
+    fallback_svg = """
+    <svg width="48" height="48" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <rect rx="4" width="24" height="24" fill="#5b7cff"/>
+      <path d="M6 14h3v4H6zM11 10h3v8h-3zM16 6h3v12h-3z" fill="white"/>
+    </svg>
+    """
+    st.markdown(fallback_svg, unsafe_allow_html=True)
+
+# Use the helper when building header/hero
+show_logo(width=84)
+st.markdown("<div class='hero'><div class='title'><div><h1>House Price Prediction</h1><div class='subtitle'>Estimate property value quickly and professionally</div></div></div></div>", unsafe_allow_html=True)
 
 # -------------------
 # Load model
