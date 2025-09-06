@@ -1,4 +1,5 @@
-# app.py — Theme selector in compact Preferences + OS-detect hint (first-visit)
+# app.py — Theme-aware animated price + Preferences + Explainability
+import json
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,11 +18,10 @@ st.set_page_config(page_title="House Price Prediction", page_icon=":bar_chart:",
 # Default app state
 # ---------------------------
 if "theme_choice" not in st.session_state:
-    st.session_state["theme_choice"] = "Auto (OS)"  # default mode
+    st.session_state["theme_choice"] = "Auto (OS)"  # default
 
 # ---------------------------
 # CSS (base + prefers-color-scheme + overrides)
-# Note: use CSS variables so we can reliably set text/result color per theme
 # ---------------------------
 base_css = r"""
 :root{
@@ -46,10 +46,8 @@ base_css = r"""
 .muted { color:var(--muted); font-size:13px; }
 .stButton>button { background: linear-gradient(90deg,var(--accent), var(--accent-2)); color:white; border:none; padding:10px 14px; border-radius:10px; font-weight:600; box-shadow:0 8px 20px rgba(91,124,255,0.14); }
 .stButton>button:hover { transform: translateY(-3px); transition: .12s; }
-
-/* Preferences expander minimal style */
-.css-1kyxreq { padding-bottom: 8px; }  /* sidebar standard class adjust (may vary by Streamlit version) */
 """
+
 prefers_dark_css = r"""
 @media (prefers-color-scheme: dark) {
   :root{
@@ -68,6 +66,7 @@ prefers_dark_css = r"""
   .result-box { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(122,161,255,0.06); }
 }
 """
+
 override_light_css = r"""
 :root{
   --accent: #5b7cff;
@@ -83,6 +82,7 @@ override_light_css = r"""
 .card { background: var(--card-bg); border: none; }
 .hero { background: linear-gradient(90deg, rgba(91,124,255,0.09), rgba(91,197,255,0.04)); }
 """
+
 override_dark_css = r"""
 :root{
   --accent: #7aa1ff;
@@ -100,17 +100,15 @@ override_dark_css = r"""
 .result-box { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(122,161,255,0.06); }
 """
 
-# inject CSS
 st.markdown(f"<style>{base_css}</style>", unsafe_allow_html=True)
 st.markdown(f"<style>{prefers_dark_css}</style>", unsafe_allow_html=True)
-# apply explicit override if chosen
 if st.session_state["theme_choice"] == "Light":
     st.markdown(f"<style>{override_light_css}</style>", unsafe_allow_html=True)
 elif st.session_state["theme_choice"] == "Dark":
     st.markdown(f"<style>{override_dark_css}</style>", unsafe_allow_html=True)
 
 # ---------------------------
-# Sidebar content (clean + professional)
+# Sidebar content
 # ---------------------------
 st.sidebar.title("About")
 st.sidebar.markdown(
@@ -122,12 +120,11 @@ st.sidebar.markdown(
     """
 )
 st.sidebar.markdown("---")
-
 st.sidebar.subheader("How to use")
 st.sidebar.markdown(
     """
-    1. Use **Single Prediction** for one-off estimates.  
-    2. Use **Batch Prediction** to upload a CSV with required columns and download results.  
+    1. Use **Single Prediction** for quick estimates.  
+    2. Use **Batch Prediction** to upload a CSV and download results.  
     3. Open **Preferences** at the bottom to change theme (Auto / Light / Dark).
     """
 )
@@ -136,11 +133,10 @@ st.sidebar.markdown("**Dataset:** Ames Housing (Kaggle)")
 st.sidebar.markdown("[Repository](https://github.com/Daksh1119/SCT_ML_1)")
 
 # ---------------------------
-# Preferences expander (minimal & placed after other sidebar content)
+# Preferences expander (compact)
 # ---------------------------
 prefs = st.sidebar.expander("Preferences", expanded=False)
 with prefs:
-    # compact & muted label
     st.markdown("<div style='font-size:12px;color:var(--muted);margin-bottom:6px'>Appearance</div>", unsafe_allow_html=True)
     theme_choice = st.selectbox(
         label="Theme (Auto / Light / Dark)",
@@ -179,13 +175,11 @@ def show_logo(width=84):
     """
     st.markdown(fallback_svg, unsafe_allow_html=True)
 
-# header / hero
 show_logo(width=84)
 st.markdown("<div class='hero'><div class='title'><div><h1>House Price Prediction</h1><div class='subtitle'>Estimate property value quickly and consistently</div></div></div></div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Client-side "first visit" hint: show subtle toast if OS prefers dark
-# This runs only client-side and uses localStorage to show once per browser
+# Client-side one-time toast for OS dark preference
 # ---------------------------
 toast_html = r"""
 <style>
@@ -215,36 +209,27 @@ toast_html = r"""
   try {
     const key = 'sct_hint_shown_v1';
     if (localStorage.getItem(key)) return;
-    // check prefers-color-scheme
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (!prefersDark) return;
-
-    // create toast
     const t = document.createElement('div');
     t.id = 'sct-toast';
     t.innerHTML = "<span style='font-weight:600;margin-right:8px;'>Tip</span> Your device prefers <strong>dark mode</strong>. Switch to Light in Preferences if you prefer higher contrast.<span class='close' title='Dismiss'>&times;</span>";
     document.body.appendChild(t);
-
-    // show after small delay
     setTimeout(()=> t.classList.add('show'), 600);
-
-    // close handler
     t.querySelector('.close').addEventListener('click', function(){
       t.classList.remove('show');
       localStorage.setItem(key, '1');
       setTimeout(()=> t.remove(), 300);
     });
-
-    // also auto-dismiss after 8s and mark as shown
     setTimeout(()=>{ if (document.body.contains(t)) { t.classList.remove('show'); localStorage.setItem(key,'1'); setTimeout(()=> t.remove(),300);} }, 8000);
-  } catch(e){ /* ignore */ }
+  } catch(e){ }
 })();
 </script>
 """
 components.html(toast_html, height=0)
 
 # ---------------------------
-# Load saved model (pipeline or plain)
+# Load saved model
 # ---------------------------
 @st.cache_resource
 def load_model():
@@ -259,9 +244,10 @@ def load_model():
 model = load_model()
 
 # ---------------------------
-# Model explainability helper
+# Explainability helper
 # ---------------------------
 FEATURES = ["GrLivArea", "BedroomAbvGr", "FullBath"]
+
 def explain_model(m):
     if m is None:
         return None
@@ -281,6 +267,58 @@ def explain_model(m):
     return pd.DataFrame({"feature": FEATURES, "coef": coefs, "pct_effect": pct})
 
 expl_df = explain_model(model)
+
+# ---------------------------
+# Theme-aware animated price renderer
+# ---------------------------
+def render_animated_price(price):
+    """
+    Renders animated price and ensures color matches theme:
+      - Use explicit override from st.session_state["theme_choice"] if set to Light/Dark
+      - Otherwise use window.matchMedia('(prefers-color-scheme: dark)') inside iframe
+    """
+    override_js = json.dumps(st.session_state.get("theme_choice", "Auto (OS)"))
+    target_int = int(round(price))
+    html = f"""
+    <div class='result-box'>
+      <div style='font-size:12px;color:var(--muted);margin-bottom:8px'>Predicted market value</div>
+      <div id='price' style='font-size:28px;font-weight:700'>$0</div>
+      <div style='color:var(--muted);font-size:12px;margin-top:8px'>Model: Linear Regression (log target)</div>
+    </div>
+    <script>
+    (function(){{
+      try {{
+        const override = {override_js};
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const lightColor = '#063047';
+        const darkColor  = '#e8f0f6';
+        let color;
+        if (override === "Light") color = lightColor;
+        else if (override === "Dark") color = darkColor;
+        else color = prefersDark ? darkColor : lightColor;
+        const el = document.getElementById('price');
+        if (el) el.style.color = color;
+        const target = {target_int};
+        let current = 0;
+        const step = Math.max(1, Math.round(target/120));
+        function tick() {{
+          current += step;
+          if (current >= target) {{
+            current = target;
+            el.innerText = '$' + current.toLocaleString();
+          }} else {{
+            el.innerText = '$' + current.toLocaleString();
+            requestAnimationFrame(tick);
+          }}
+        }}
+        tick();
+      }} catch (e) {{
+        try {{ document.getElementById('price').innerText = '$' + {target_int}.toLocaleString(); }} catch(_) {{}}
+      }}
+    }})();
+    </script>
+    """
+    components.html(html, height=160)
 
 # ---------------------------
 # Tabs: Single & Batch
@@ -309,33 +347,8 @@ with tab1:
                 X = pd.DataFrame([[grlivarea, bedrooms, bathrooms]], columns=FEATURES)
                 logp = model.predict(X)[0]
                 price = np.expm1(logp)
-                animate = f"""
-                <div class='result-box'>
-                  <div style='font-size:12px;color:var(--muted);margin-bottom:8px'>Predicted market value</div>
-                  <div id='price' style='font-size:28px;font-weight:700;color:var(--result-text)'>$0</div>
-                  <div style='color:var(--muted);font-size:12px;margin-top:8px'>Model: Linear Regression (log target)</div>
-                </div>
-                <script>
-                  (function(){{
-                    const el = document.getElementById('price');
-                    const target = {int(round(price))};
-                    let current = 0;
-                    const step = Math.max(1, Math.round(target/120));
-                    function tick() {{
-                      current += step;
-                      if (current >= target) {{
-                        current = target;
-                        el.innerText = '$' + current.toLocaleString();
-                      }} else {{
-                        el.innerText = '$' + current.toLocaleString();
-                        requestAnimationFrame(tick);
-                      }}
-                    }}
-                    tick();
-                  }})();
-                </script>
-                """
-                components.html(animate, height=160)
+                # Theme-aware animated renderer
+                render_animated_price(price)
         else:
             st.info("Enter inputs and click **Predict Price**.")
         st.markdown("</div>", unsafe_allow_html=True)
