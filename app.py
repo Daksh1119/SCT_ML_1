@@ -1,4 +1,4 @@
-# app.py — Professional UI + Explainability + OS-aware Dark Mode
+# app.py — Theme selector in compact Preferences + OS-detect hint (first-visit)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,25 +8,21 @@ import streamlit.components.v1 as components
 import plotly.graph_objects as go
 import requests
 
-# -------------------
+# ---------------------------
 # Page config
-# -------------------
+# ---------------------------
 st.set_page_config(page_title="House Price Prediction", page_icon=":bar_chart:", layout="wide")
 
-# -------------------
-# Sidebar: Dark mode toggle (persist)
-# -------------------
-if "dark_mode" not in st.session_state:
-    st.session_state["dark_mode"] = False
+# ---------------------------
+# Default app state
+# ---------------------------
+if "theme_choice" not in st.session_state:
+    st.session_state["theme_choice"] = "Auto (OS)"  # default mode
 
-# The checkbox allows explicit override. Default unchecked — UI will still follow OS preference via CSS media query.
-dark_mode_override = st.sidebar.checkbox("Enable dark mode (override OS)", value=st.session_state["dark_mode"])
-st.session_state["dark_mode"] = dark_mode_override
-
-# -------------------
-# CSS: base + prefers-color-scheme media query (auto-detect) + explicit dark override
-# -------------------
-# Base (light) variables
+# ---------------------------
+# CSS (base + prefers-color-scheme + overrides)
+# Note: use CSS variables so we can reliably set text/result color per theme
+# ---------------------------
 base_css = r"""
 :root{
   --accent: #5b7cff;
@@ -35,23 +31,25 @@ base_css = r"""
   --bg: linear-gradient(180deg,#f6f8fb 0%,#ffffff 100%);
   --card-bg: #ffffff;
   --text: #0f2b3d;
+  --result-text: #063047;
   --muted-2: #97a0aa;
   --shadow: 0 8px 30px rgba(35,40,50,0.04);
 }
 .stApp { background: var(--bg); color: var(--text); font-family: Inter, Roboto, sans-serif; }
 .hero { padding:18px 22px; border-radius:12px; margin-bottom:14px; background: linear-gradient(90deg, rgba(91,124,255,0.09), rgba(91,197,255,0.04)); box-shadow:var(--shadow); position:relative; overflow:hidden; }
 .title { display:flex; align-items:center; gap:14px; }
-.title h1 { margin:0; font-size:22px; color:var(--text); }
+.title h1 { margin:0; font-size:22px; color:var(--text); font-weight:700; }
 .subtitle { color:var(--muted); margin-top:4px; font-size:13px; }
 .card { background:var(--card-bg); padding:18px; border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
 .result-box { padding:16px; border-radius:10px; text-align:center; border:1px solid rgba(91,124,255,0.06); background: linear-gradient(180deg,#ffffff,#fbfdff); }
-.result-amount { font-size:28px; font-weight:700; color:#063047; }
+.result-amount { font-size:28px; font-weight:700; color:var(--result-text); }
 .muted { color:var(--muted); font-size:13px; }
 .stButton>button { background: linear-gradient(90deg,var(--accent), var(--accent-2)); color:white; border:none; padding:10px 14px; border-radius:10px; font-weight:600; box-shadow:0 8px 20px rgba(91,124,255,0.14); }
 .stButton>button:hover { transform: translateY(-3px); transition: .12s; }
-"""
 
-# Auto-apply dark theme when OS prefers dark (no JS needed)
+/* Preferences expander minimal style */
+.css-1kyxreq { padding-bottom: 8px; }  /* sidebar standard class adjust (may vary by Streamlit version) */
+"""
 prefers_dark_css = r"""
 @media (prefers-color-scheme: dark) {
   :root{
@@ -61,6 +59,7 @@ prefers_dark_css = r"""
     --bg: linear-gradient(180deg,#061018 0%, #081623 100%);
     --card-bg: rgba(10,13,20,0.65);
     --text: #e8f0f6;
+    --result-text: #e8f0f6;
     --muted-2: #9fb0bf;
     --shadow: 0 12px 36px rgba(2,6,23,0.6);
   }
@@ -69,8 +68,21 @@ prefers_dark_css = r"""
   .result-box { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(122,161,255,0.06); }
 }
 """
-
-# Explicit override CSS (when user checks the sidebar box)
+override_light_css = r"""
+:root{
+  --accent: #5b7cff;
+  --accent-2: #33d3ff;
+  --muted: #6c757d;
+  --bg: linear-gradient(180deg,#f6f8fb 0%,#ffffff 100%);
+  --card-bg: #ffffff;
+  --text: #0f2b3d;
+  --result-text: #063047;
+  --muted-2: #97a0aa;
+  --shadow: 0 8px 30px rgba(35,40,50,0.04);
+}
+.card { background: var(--card-bg); border: none; }
+.hero { background: linear-gradient(90deg, rgba(91,124,255,0.09), rgba(91,197,255,0.04)); }
+"""
 override_dark_css = r"""
 :root{
   --accent: #7aa1ff;
@@ -79,6 +91,7 @@ override_dark_css = r"""
   --bg: linear-gradient(180deg,#061018 0%, #081623 100%);
   --card-bg: rgba(10,13,20,0.65);
   --text: #e8f0f6;
+  --result-text: #e8f0f6;
   --muted-2: #9fb0bf;
   --shadow: 0 12px 36px rgba(2,6,23,0.6);
 }
@@ -87,31 +100,60 @@ override_dark_css = r"""
 .result-box { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(122,161,255,0.06); }
 """
 
-# Inject CSS: base + prefers-color-scheme
+# inject CSS
 st.markdown(f"<style>{base_css}</style>", unsafe_allow_html=True)
 st.markdown(f"<style>{prefers_dark_css}</style>", unsafe_allow_html=True)
-# If override checked, inject override CSS (this takes precedence)
-if st.session_state["dark_mode"]:
+# apply explicit override if chosen
+if st.session_state["theme_choice"] == "Light":
+    st.markdown(f"<style>{override_light_css}</style>", unsafe_allow_html=True)
+elif st.session_state["theme_choice"] == "Dark":
     st.markdown(f"<style>{override_dark_css}</style>", unsafe_allow_html=True)
 
-# -------------------
-# Sidebar details
-# -------------------
+# ---------------------------
+# Sidebar content (clean + professional)
+# ---------------------------
 st.sidebar.title("About")
-st.sidebar.markdown("""
-**House Price Prediction** — a polished demo for portfolio review.
+st.sidebar.markdown(
+    """
+    Compact estimator for residential property prices.
+    - Input features: `GrLivArea`, `BedroomAbvGr`, `FullBath`.
+    - Two modes: Single prediction and Batch CSV upload.
+    - Explainability: standardized coefficients (1 SD effect).
+    """
+)
+st.sidebar.markdown("---")
 
-- Linear Regression (log target)
-- Single & batch predictions
-- Model explainability: standardized coefficients
-""")
+st.sidebar.subheader("How to use")
+st.sidebar.markdown(
+    """
+    1. Use **Single Prediction** for one-off estimates.  
+    2. Use **Batch Prediction** to upload a CSV with required columns and download results.  
+    3. Open **Preferences** at the bottom to change theme (Auto / Light / Dark).
+    """
+)
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Dataset:** Ames Housing (Kaggle)")
 st.sidebar.markdown("[Repository](https://github.com/Daksh1119/SCT_ML_1)")
 
-# -------------------
-# Robust logo loading (local first, then GitHub raw URL fallback)
-# -------------------
+# ---------------------------
+# Preferences expander (minimal & placed after other sidebar content)
+# ---------------------------
+prefs = st.sidebar.expander("Preferences", expanded=False)
+with prefs:
+    # compact & muted label
+    st.markdown("<div style='font-size:12px;color:var(--muted);margin-bottom:6px'>Appearance</div>", unsafe_allow_html=True)
+    theme_choice = st.selectbox(
+        label="Theme (Auto / Light / Dark)",
+        options=["Auto (OS)", "Light", "Dark"],
+        index=["Auto (OS)", "Light", "Dark"].index(st.session_state.get("theme_choice", "Auto (OS)")),
+        help="Auto follows your OS color-scheme preference. Choose Light or Dark to force."
+    )
+    st.session_state["theme_choice"] = theme_choice
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+
+# ---------------------------
+# Robust logo loader
+# ---------------------------
 LOGO_LOCAL = Path("logo.png")
 RAW_URL = "https://raw.githubusercontent.com/Daksh1119/SCT_ML_1/main/logo.png"
 
@@ -137,12 +179,73 @@ def show_logo(width=84):
     """
     st.markdown(fallback_svg, unsafe_allow_html=True)
 
+# header / hero
 show_logo(width=84)
-st.markdown("<div class='hero'><div class='title'><div><h1>House Price Prediction</h1><div class='subtitle'>Estimate property value quickly and professionally</div></div></div></div>", unsafe_allow_html=True)
+st.markdown("<div class='hero'><div class='title'><div><h1>House Price Prediction</h1><div class='subtitle'>Estimate property value quickly and consistently</div></div></div></div>", unsafe_allow_html=True)
 
-# -------------------
-# Load model function
-# -------------------
+# ---------------------------
+# Client-side "first visit" hint: show subtle toast if OS prefers dark
+# This runs only client-side and uses localStorage to show once per browser
+# ---------------------------
+toast_html = r"""
+<style>
+#sct-toast {
+  position: fixed;
+  left: 16px;
+  bottom: 20px;
+  background: rgba(11,27,41,0.96);
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(2,6,23,0.6);
+  font-size: 13px;
+  z-index: 9999;
+  max-width: 320px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .28s ease, transform .28s ease;
+}
+#sct-toast.show { opacity: 1; transform: translateY(0); }
+#sct-toast .close { float:right; cursor:pointer; margin-left:8px; opacity:0.8; }
+#sct-toast .close:hover { opacity: 1; }
+#sct-toast a { color: #bfe8ff; text-decoration: underline; }
+</style>
+<script>
+(function(){
+  try {
+    const key = 'sct_hint_shown_v1';
+    if (localStorage.getItem(key)) return;
+    // check prefers-color-scheme
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (!prefersDark) return;
+
+    // create toast
+    const t = document.createElement('div');
+    t.id = 'sct-toast';
+    t.innerHTML = "<span style='font-weight:600;margin-right:8px;'>Tip</span> Your device prefers <strong>dark mode</strong>. Switch to Light in Preferences if you prefer higher contrast.<span class='close' title='Dismiss'>&times;</span>";
+    document.body.appendChild(t);
+
+    // show after small delay
+    setTimeout(()=> t.classList.add('show'), 600);
+
+    // close handler
+    t.querySelector('.close').addEventListener('click', function(){
+      t.classList.remove('show');
+      localStorage.setItem(key, '1');
+      setTimeout(()=> t.remove(), 300);
+    });
+
+    // also auto-dismiss after 8s and mark as shown
+    setTimeout(()=>{ if (document.body.contains(t)) { t.classList.remove('show'); localStorage.setItem(key,'1'); setTimeout(()=> t.remove(),300);} }, 8000);
+  } catch(e){ /* ignore */ }
+})();
+</script>
+"""
+components.html(toast_html, height=0)
+
+# ---------------------------
+# Load saved model (pipeline or plain)
+# ---------------------------
 @st.cache_resource
 def load_model():
     p = Path("linear_log.pkl")
@@ -155,11 +258,10 @@ def load_model():
 
 model = load_model()
 
-# -------------------
-# Explainability helper
-# -------------------
+# ---------------------------
+# Model explainability helper
+# ---------------------------
 FEATURES = ["GrLivArea", "BedroomAbvGr", "FullBath"]
-
 def explain_model(m):
     if m is None:
         return None
@@ -180,9 +282,9 @@ def explain_model(m):
 
 expl_df = explain_model(model)
 
-# -------------------
+# ---------------------------
 # Tabs: Single & Batch
-# -------------------
+# ---------------------------
 tab1, tab2 = st.tabs(["Single Prediction", "Batch Prediction"])
 
 with tab1:
@@ -190,14 +292,13 @@ with tab1:
     with c1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("Input features")
-        st.write("Provide property attributes:")
+        st.write("Provide property attributes to estimate market value.")
         grlivarea = st.number_input("Above-ground living area (sqft)", min_value=300, max_value=9000, value=1500, step=50)
         bedrooms = st.slider("Bedrooms above grade", 0, 8, 3)
         bathrooms = st.slider("Full bathrooms above grade", 0, 5, 2)
-        st.write("")
+        st.write("")  # spacing
         predict = st.button("Predict Price")
         st.markdown("</div>", unsafe_allow_html=True)
-
     with c2:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("Predicted value")
@@ -211,7 +312,7 @@ with tab1:
                 animate = f"""
                 <div class='result-box'>
                   <div style='font-size:12px;color:var(--muted);margin-bottom:8px'>Predicted market value</div>
-                  <div id='price' style='font-size:28px;font-weight:700;color:var(--text)'>$0</div>
+                  <div id='price' style='font-size:28px;font-weight:700;color:var(--result-text)'>$0</div>
                   <div style='color:var(--muted);font-size:12px;margin-top:8px'>Model: Linear Regression (log target)</div>
                 </div>
                 <script>
@@ -241,11 +342,10 @@ with tab1:
 
     with st.expander("🔎 Model explainability — standardized coefficients (1 SD effect)"):
         if expl_df is None:
-            st.write("Explainability not available (model not loaded or not in expected format).")
+            st.write("Explainability not available (model not loaded or unsupported format).")
         else:
-            st.markdown("Coefficients are shown in model units. For the log-target model, the **percent effect** column approximates the % change in price for a 1-SD increase in the feature: `exp(coef) - 1`.")
+            st.markdown("`pct_effect` approximates % change in price for a +1 SD increase in the feature: `exp(coef) - 1`.")
             st.dataframe(expl_df.style.format({"coef":"{:.4f}", "pct_effect":"{:.1f}%"}), height=160)
-
             plot_df = expl_df.copy().sort_values("pct_effect", ascending=False)
             fig = go.Figure(go.Bar(
                 x=plot_df["pct_effect"],
